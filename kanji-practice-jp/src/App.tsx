@@ -14,7 +14,6 @@ function App() {
   const [showImage, setShowImage] = useState<string | null>(null);
   const isComposing = useRef(false);
 
-  // 1. 核心改进：无论字数多少，保持容器高度一致，防止布局跳动
   const activeKanjiList = currentGrade === 'wrong' ? wrongKanji : (KANJI_GRADES[currentGrade] || []);
   const masteredInCurrent = activeKanjiList.filter(k => masteredKanji.includes(k)).length;
   const progress = activeKanjiList.length > 0 ? Math.round((masteredInCurrent / activeKanjiList.length) * 100) : 0;
@@ -35,7 +34,7 @@ function App() {
     try {
       const res = await fetch(`https://kanjiapi.dev/v1/kanji/${encodeURIComponent(char)}`);
       if (res.ok) {
-        const data = await res.json();
+        const data: any = await res.json(); // 使用 any 绕过类型检查
         setKanjiInfo({
           kun: data.kun_readings[0] || 'なし',
           on: data.on_readings[0] || 'なし',
@@ -60,51 +59,15 @@ function App() {
     }
   };
 
-  const handleMistake = () => {
-    if (!wrongKanji.includes(inputText)) {
-      const newList = [...wrongKanji, inputText];
-      setWrongKanji(newList);
-      localStorage.setItem('kanji_wrong_list', JSON.stringify(newList));
-    }
-  };
-
-  const handleComplete = () => {
-    confetti({ particleCount: 150, spread: 70, origin: { y: 0.7 } });
-    
-    // 成功后移除错题
-    const newWrong = wrongKanji.filter(k => k !== inputText);
-    setWrongKanji(newWrong);
-    localStorage.setItem('kanji_wrong_list', JSON.stringify(newWrong));
-
-    if (!masteredKanji.includes(inputText)) {
-      const newM = [...masteredKanji, inputText];
-      setMasteredKanji(newM);
-      localStorage.setItem('kanji_mastered_list', JSON.stringify(newM));
-    }
-
-    // --- 核心改进：素材库图片指向 ---
-    // 逻辑：优先显示本地 assets 文件夹下的图片
-    const localImageUrl = `/assets/kanji/${inputText}.jpg`;
-    setShowImage(localImageUrl);
-  };
-
   return (
     <div style={styles.pageWrapper}>
       <div style={styles.appContainer}>
-        
-        {/* 成功图片弹窗 */}
         {showImage && (
           <div style={styles.modalOverlay} onClick={() => setShowImage(null)}>
             <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
               <h2 style={{color: '#BC002D', marginBottom: '10px'}}>お見事！</h2>
-              <img 
-                src={showImage} 
-                style={styles.resultImg} 
-                alt="kanji-meaning" 
-                // 如果本地没有这张图，显示一张默认的励志图
-                onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1528127269322-539801943592?w=400"; }}
-              />
-              <p style={{fontWeight: 'bold', fontSize: '20px', margin: '10px 0'}}>{inputText}: {kanjiInfo.meaning}</p>
+              <img src={showImage} style={styles.resultImg} alt="result" onError={(e: any) => e.target.src="https://images.unsplash.com/photo-1528127269322-539801943592?w=400"} />
+              <p style={{fontWeight: 'bold', fontSize: '20px'}}>{inputText}: {kanjiInfo.meaning}</p>
               <button onClick={() => setShowImage(null)} style={styles.closeBtn}>次へ</button>
             </div>
           </div>
@@ -127,9 +90,7 @@ function App() {
                 backgroundColor: currentGrade === g ? (g === 'wrong' ? '#E74C3C' : '#BC002D') : '#fff', 
                 color: currentGrade === g ? '#fff' : (g === 'wrong' ? '#E74C3C' : '#BC002D'),
                 borderColor: g === 'wrong' ? '#E74C3C' : '#BC002D'
-              }}>
-              {g === 'wrong' ? '弱点克服' : g}
-            </button>
+              }}>{g === 'wrong' ? '弱点克服' : g}</button>
           ))}
         </nav>
 
@@ -147,7 +108,6 @@ function App() {
           </div>
         </div>
 
-        {/* 字库网格：固定高度防止比例跳动 */}
         <div style={styles.gradeBox}>
           <div style={styles.kanjiList}>
             {[...new Set(activeKanjiList)].map((k) => (
@@ -169,7 +129,27 @@ function App() {
 
         <div style={styles.buttonGrid}>
           <button onClick={() => writer?.animateCharacter()} style={styles.btnSecondary}>お手本</button>
-          <button onClick={() => writer?.quiz({ onMistake: handleMistake, onComplete: handleComplete })} style={styles.btnPrimary}>練習開始</button>
+          <button onClick={() => writer?.quiz({ 
+            onMistake: () => {
+              if (!wrongKanji.includes(inputText)) {
+                const newList = [...wrongKanji, inputText];
+                setWrongKanji(newList);
+                localStorage.setItem('kanji_wrong_list', JSON.stringify(newList));
+              }
+            }, 
+            onComplete: () => {
+              confetti({ particleCount: 150, spread: 70, origin: { y: 0.7 } });
+              const newW = wrongKanji.filter(k => k !== inputText);
+              setWrongKanji(newW);
+              localStorage.setItem('kanji_wrong_list', JSON.stringify(newW));
+              if (!masteredKanji.includes(inputText)) {
+                const newM = [...masteredKanji, inputText];
+                setMasteredKanji(newM);
+                localStorage.setItem('kanji_mastered_list', JSON.stringify(newM));
+              }
+              setShowImage(`/assets/kanji/${inputText}.jpg`);
+            } 
+          })} style={styles.btnPrimary}>練習開始</button>
         </div>
 
         <div style={{marginTop: '15px'}}>
@@ -191,7 +171,7 @@ function App() {
         </div>
 
         <footer style={styles.footer}>
-          <a href="https://x.com/ShishiYuyu87109" target="_blank" rel="noopener noreferrer" style={styles.footerLink}>
+          <a href="https://www.facebook.com/zhao123hong/" target="_blank" rel="noopener noreferrer" style={styles.footerLink}>
             © PROTECH株式会社
           </a>
         </footer>
@@ -200,43 +180,19 @@ function App() {
   );
 }
 
-const styles: { [key: string]: React.CSSProperties } = {
-  // 页面外层：全屏且绝对居中
-  pageWrapper: { 
-    backgroundColor: '#F0F2F5', 
-    minHeight: '100vh', 
-    width: '100vw',             // 强制100%视口宽度
-    display: 'flex', 
-    justifyContent: 'center',  // 水平居中
-    alignItems: 'center',      // 垂直居中
-    fontFamily: "'Noto Sans JP', sans-serif" 
-  },
-  appContainer: { 
-    width: '100%', 
-    maxWidth: '500px',         // 在PC上限制宽度
-    backgroundColor: '#FAFAFA', 
-    borderRadius: '30px', 
-    display: 'flex', 
-    flexDirection: 'column', 
-    alignItems: 'center', 
-    padding: '25px', 
-    boxShadow: '0 15px 35px rgba(0,0,0,0.1)', 
-    position: 'relative',
-    margin: 'auto'             // 确保在 Flex 容器中居中
-  },
+const styles: { [key: string]: any } = {
+  pageWrapper: { backgroundColor: '#F0F2F5', minHeight: '100vh', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px 0', fontFamily: "'Noto Sans JP', sans-serif" },
+  appContainer: { width: '95%', maxWidth: '500px', backgroundColor: '#FAFAFA', borderRadius: '30px', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '25px', boxShadow: '0 15px 35px rgba(0,0,0,0.1)', position: 'relative' },
   progressContainer: { width: '100%', marginBottom: '20px' },
   progressText: { display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#BC002D', fontWeight: 'bold', marginBottom: '8px' },
   progressBarBg: { width: '100%', height: '10px', backgroundColor: '#EEE', borderRadius: '5px', overflow: 'hidden' },
   progressBarFill: { height: '100%', backgroundColor: '#BC002D', transition: 'width 0.5s ease' },
-  
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: '#fff', padding: '30px', borderRadius: '35px', textAlign: 'center', width: '85%', maxWidth: '420px' },
   resultImg: { width: '100%', height: '240px', objectFit: 'cover', borderRadius: '25px', marginBottom: '15px' },
   closeBtn: { backgroundColor: '#BC002D', color: '#fff', border: 'none', padding: '14px 45px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold' },
-
   nav: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px', justifyContent: 'center' },
   navBtn: { padding: '8px 16px', border: '1px solid', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' },
-  
   infoCard: { backgroundColor: '#fff', width: '100%', padding: '20px', borderRadius: '25px', boxShadow: '0 5px 15px rgba(0,0,0,0.03)', display: 'flex', gap: '25px', marginBottom: '20px' },
   kanjiMain: { textAlign: 'center' },
   kanjiBig: { fontSize: '65px', fontWeight: '700', color: '#333', lineHeight: '1' },
@@ -244,22 +200,17 @@ const styles: { [key: string]: React.CSSProperties } = {
   readings: { flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' },
   infoRow: { fontSize: '14px', marginBottom: '5px' },
   meaning: { fontSize: '12px', color: '#999', fontStyle: 'italic', marginTop: '5px' },
-
-  // 重点：固定高度 (minHeight)，确保即便没字，比例也不变
-  gradeBox: { backgroundColor: '#fff', padding: '15px', borderRadius: '20px', width: '100%', minHeight: '140px', maxHeight: '140px', overflowY: 'auto', marginBottom: '25px', border: '1px solid #F0F0F0' },
+  gradeBox: { backgroundColor: '#fff', padding: '15px', borderRadius: '20px', width: '100%', maxHeight: '140px', overflowY: 'auto', marginBottom: '25px', border: '1px solid #F0F0F0' },
   kanjiList: { display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' },
-  miniBtn: { width: '42px', height: '42px', border: '1.5px solid', borderRadius: '10px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontWeight: '500' },
-
+  miniBtn: { width: '42px', height: '42px', border: '1.5px solid', borderRadius: '10px', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 },
   canvasWrapper: { position: 'relative', width: '300px', height: '300px', marginBottom: '25px', backgroundColor: '#fff', borderRadius: '35px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.08)' },
   gridBg: { position: 'absolute', width: '100%', height: '100%', border: '2px solid #BC002D', pointerEvents: 'none', opacity: 0.08 },
   gridLineH: { position: 'absolute', top: '50%', width: '100%', borderTop: '1px dashed #BC002D' },
   gridLineV: { position: 'absolute', left: '50%', height: '100%', borderLeft: '1px dashed #BC002D' },
   canvas: { position: 'relative', zIndex: 1 },
-
   buttonGrid: { display: 'flex', gap: '15px', width: '100%' },
   btnPrimary: { flex: 2, padding: '18px', backgroundColor: '#BC002D', color: '#fff', border: 'none', borderRadius: '20px', fontWeight: 'bold', fontSize: '20px', cursor: 'pointer' },
   btnSecondary: { flex: 1, padding: '18px', backgroundColor: '#34495E', color: '#fff', border: 'none', borderRadius: '20px', cursor: 'pointer' },
-  
   input: { padding: '12px', fontSize: '18px', width: '90px', textAlign: 'center', border: '1px solid #ddd', borderRadius: '15px' },
   footer: { marginTop: '40px', paddingBottom: '10px' },
   footerLink: { color: '#CCC', textDecoration: 'none', fontSize: '12px' }
